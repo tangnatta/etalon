@@ -1,6 +1,6 @@
-from multiprocessing import Pool
 import argparse
 from functools import partial
+from multiprocessing import Pool
 
 from etalon.capacity_search.capacity_search import CapacitySearch
 from etalon.capacity_search.config.config import JobConfig

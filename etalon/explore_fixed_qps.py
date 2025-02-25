@@ -1,5 +1,8 @@
+import argparse
+from functools import partial
 import json
 import multiprocessing
+from multiprocessing import Pool
 import os
 import platform
 
@@ -130,19 +133,27 @@ def setup():
     return args, config
 
 
+def run(
+    job_config: JobConfig,
+    args: argparse.Namespace,
+):
+    capacity_search = CapacitySearch(
+        job_config,
+        args,
+    )
+    return num_fixed_qps_values(capacity_search)
+
+
 if __name__ == "__main__":
     if platform.system() == "Darwin":
         multiprocessing.set_start_method("fork", force=True)
 
     args, config = setup()
+
     job_configs = JobConfig.generate_job_configs(config)
+    num_jobs = len(job_configs)
+    logger.info(f"Running {num_jobs} jobs")
 
-    all_results = []
-
-    for job_config in job_configs:
-        capacity_search = CapacitySearch(
-            job_config,
-            args,
-        )
-        result = num_fixed_qps_values(capacity_search)
-        all_results.append(result)
+    with Pool(processes=num_jobs) as capacity_search_pool:
+        run_partial = partial(run, args=args)  # Pre-fill `args`
+        all_results = capacity_search_pool.map(run_partial, job_configs)
