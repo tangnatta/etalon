@@ -11,20 +11,20 @@ def _get_hash(key):
 @dataclass
 class ServerConfig:
     openai_server_engine: Optional[str] = None
+    openai_api_url: Optional[str] = None
     openai_api_key: Optional[str] = None
-    port: Optional[int] = 8000
 
     def get_key(self):
-        return f"{self.openai_server_engine}_{self.openai_api_key}_{self.port}"
+        return f"{self.openai_server_engine}_{self.openai_api_url}_{self.openai_api_key}"
 
     def get_human_readable_name(self):
-        return f"Server engine: {self.openai_server_engine}"
+        return f"Server engine: {self.openai_server_engine}, URL: {self.openai_api_url}"
 
     def to_config_dict(self):
         return {
             "openai_server_engine": self.openai_server_engine,
+            "openai_api_url": self.openai_api_url,
             "openai_api_key": self.openai_api_key,
-            "port": self.port,
         }
 
 
@@ -33,8 +33,6 @@ class ModelConfig:
     name: str
     identifier: str
     tokenizer: Optional[str] = None
-    parallel_specs: List[str] = field(default_factory=list)
-    traces: List[str] = field(default_factory=list)
 
     def get_key(self):
         return f"{self.name}"
@@ -51,40 +49,13 @@ class ModelConfig:
             command += f" --client_config_tokenizer {self.tokenizer}"
         return command
 
-    def is_parallel_spec_valid(self, spec_name: str) -> bool:
-        return not self.parallel_specs or spec_name in self.parallel_specs
-
-    def is_trace_valid(self, trace_name: Optional[str]) -> bool:
-        return not self.traces or trace_name in self.traces
-
-
-@dataclass
-class ParallelConfig:
-    name: str
-    tp_dimension: int
-    pp_dimension: int
-
-    def get_key(self):
-        return f"tp{self.tp_dimension}_pp{self.pp_dimension}"
-
-    def get_human_readable_name(self):
-        return f"TP: {self.tp_dimension}, PP: {self.pp_dimension}"
-
-    def get_num_gpus(self):
-        return self.tp_dimension * self.pp_dimension
-
-    def to_config_dict(self):
-        return {
-            "model_tensor_parallel_degree": self.tp_dimension,
-            "model_pipeline_parallel_degree": self.pp_dimension,
-        }
-
 
 @dataclass
 class RequestGeneratorConfig:
     start_qps: float
     request_interval_generator_provider: str
     request_length_generator_provider: str
+    request_generator_max_tokens: Optional[int] = None
     gamma_request_interval_generator_cv: Optional[float] = None
     trace_request_interval_generator_trace_file: Optional[str] = None
     trace_request_interval_generator_start_time: Optional[str] = None
@@ -145,6 +116,9 @@ class RequestGeneratorConfig:
             config_dict["trace_request_length_generator_config_decode_scale_factor"] = (
                 self.trace_request_length_generator_decode_scale_factor
             )
+            config_dict["trace_request_length_generator_config_max_tokens"] = (
+                self.request_generator_max_tokens
+            )
         elif self.request_length_generator_provider == "fixed":
             config_dict["fixed_request_length_generator_config_prefill_tokens"] = (
                 self.fixed_request_generator_prefill_tokens
@@ -152,9 +126,15 @@ class RequestGeneratorConfig:
             config_dict["fixed_request_length_generator_config_decode_tokens"] = (
                 self.fixed_request_generator_decode_tokens
             )
+            config_dict["fixed_request_length_generator_config_max_tokens"] = (
+                self.request_generator_max_tokens
+            )
         elif self.request_length_generator_provider == "synthetic":
             config_dict["uniform_request_length_generator_config_min_tokens"] = (
                 self.synthetic_request_generator_min_tokens
+            )
+            config_dict["uniform_request_length_generator_config_max_tokens"] = (
+                self.request_generator_max_tokens
             )
             config_dict[
                 "uniform_request_length_generator_config_prefill_to_decode_ratio"
@@ -165,6 +145,9 @@ class RequestGeneratorConfig:
             )
             config_dict["zipf_request_length_generator_config_scramble"] = (
                 self.zipf_request_length_generator_scramble
+            )
+            config_dict["zipf_request_length_generator_config_max_tokens"] = (
+                self.request_generator_max_tokens
             )
         return config_dict
 
@@ -181,14 +164,13 @@ class RequestGeneratorConfig:
 
 
 @dataclass
-class RequestConfig:
+class ClientConfig:
     num_clients: Optional[int] = None
     num_concurrent_requests_per_client: Optional[int] = None
     timeout: Optional[int] = None
     max_num_completed_requests: Optional[int] = None
     additional_sampling_params: Optional[Dict[str, Any]] = None
     llm_api: Optional[str] = None
-    request_generator_max_tokens: Optional[int] = None
 
     def to_config_dict(self):
         return {
@@ -198,10 +180,6 @@ class RequestConfig:
             "max_completed_requests": self.max_num_completed_requests,
             "client_config_additional_sampling_params": self.additional_sampling_params,
             "client_config_llm_api": self.llm_api,
-            "trace_request_length_generator_config_max_tokens": self.request_generator_max_tokens,
-            "zipf_request_length_generator_config_max_tokens": self.request_generator_max_tokens,
-            "uniform_request_length_generator_config_max_tokens": self.request_generator_max_tokens,
-            "fixed_request_length_generator_config_max_tokens": self.request_generator_max_tokens,
         }
 
     def to_args(self):
@@ -227,15 +205,13 @@ class JobConfig:
     def __init__(
         self,
         model_config: ModelConfig,
-        parallel_config: ParallelConfig,
         request_generator_config: RequestGeneratorConfig,
-        request_config: RequestConfig,
+        client_config: ClientConfig,
         server_config: ServerConfig,
     ):
         self.model_config = model_config
-        self.parallel_config = parallel_config
         self.request_generator_config = request_generator_config
-        self.request_config = request_config
+        self.client_config = client_config
         self.server_config = server_config
 
         self.start_qps = self.request_generator_config.start_qps
@@ -243,9 +219,8 @@ class JobConfig:
     def get_key(self):
         config_keys = [
             self.model_config.get_key(),
-            self.parallel_config.get_key(),
             self.request_generator_config.get_key(),
-            self.request_config.get_key(),
+            self.client_config.get_key(),
             self.server_config.get_key(),
         ]
 
@@ -254,88 +229,52 @@ class JobConfig:
     def get_human_readable_name(self):
         substrings = [
             self.model_config.get_human_readable_name(),
-            self.parallel_config.get_human_readable_name(),
             self.request_generator_config.get_human_readable_name(),
-            self.request_config.to_human_readable_name(),
+            self.client_config.to_human_readable_name(),
             self.server_config.get_human_readable_name(),
             f"Hash: {_get_hash(self.get_key())}",
         ]
         return ", ".join(substrings)
 
-    def get_num_gpus(self):
-        return self.parallel_config.get_num_gpus()
-
     def to_config_dict(self):
         return {
             **self.model_config.to_config_dict(),
-            **self.parallel_config.to_config_dict(),
             **self.request_generator_config.to_config_dict(),
-            **self.request_config.to_config_dict(),
+            **self.client_config.to_config_dict(),
             **self.server_config.to_config_dict(),
         }
 
     def to_args(self):
         model_args = self.model_config.to_args()
         request_generator_args = self.request_generator_config.to_args()
-        request_args = self.request_config.to_args()
+        request_args = self.client_config.to_args()
         return f"{model_args} {request_generator_args} {request_args}"
 
     @classmethod
     def generate_job_configs(cls, config: dict):
         job_configs = []
-        port = 8000
         for (
             model_config,
-            parallel_config,
             request_generator_config,
-            request_config,
+            client_config,
             server_config,
         ) in product(
             config["models"],
-            config["parallel_specs"],
             config["request_generator_configs"],
-            config["request_configs"],
+            config["client_configs"],
             config["servers"],
         ):
             model_config = ModelConfig(**model_config)
-            parallel_config = ParallelConfig(**parallel_config)
             request_generator_config = RequestGeneratorConfig(
                 **request_generator_config
             )
-            request_config = RequestConfig(**request_config)
+            client_config = ClientConfig(**client_config)
             server_config = ServerConfig(**server_config)
-
-            # adding this to avoid port conflicts when running multiple jobs
-            server_config.port = port
-
-            if (
-                not model_config.is_parallel_spec_valid(parallel_config.name)
-                or not model_config.is_trace_valid(
-                    request_generator_config.trace_request_interval_generator_trace_file
-                )
-                or (
-                    model_config.name == "gpt-3.5-turbo"
-                    and server_config.openai_server_engine
-                    in ["vllm", "lightllm", "fastertransformers", "sarathi-serve"]
-                )
-                or (
-                    request_generator_config.trace_file_name == "sharegpt"
-                    and request_config.request_generator_max_tokens == 16384
-                )
-                or (
-                    request_generator_config.trace_file_name == "arxiv"
-                    and request_config.request_generator_max_tokens == 8192
-                )
-            ):
-                continue
-
-            port += 1
 
             job_config = cls(
                 model_config,
-                parallel_config,
                 request_generator_config,
-                request_config,
+                client_config,
                 server_config,
             )
             job_configs.append(job_config)

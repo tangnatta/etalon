@@ -22,6 +22,11 @@ python -m etalon.capacity_search.main \
 ```
 `--profile-dir` should point to where `prefill_predictor.pkl` model is stored for a given model and open source system.
 
+If you want to run capacity search without prefill profiler, i.e., use fixed TTFT slo, add the following flag:
+```bash
+    --no-dynamic-ttft-slo
+```
+
 ## TBT-TTFT based Capacity Search
 ```bash
 python -m etalon.capacity_search.main \

@@ -60,23 +60,23 @@ export OPENAI_API_BASE=https://api.endpoints.anyscale.com/v1
 #### Running Benchmark
 ```bash
 python -m etalon.run_benchmark \
---model "meta-llama/Meta-Llama-3-8B-Instruct" \
---max-num-completed-requests 150 \
+--client_config_model "meta-llama/Meta-Llama-3-8B-Instruct" \
+--max_completed_requests 150 \
 --timeout 600 \
---num-ray-clients 2 \
---num-concurrent-requests-per-client 5 \
---output-dir "result_outputs" \
---request-interval-generator-provider "poisson" \
---poisson-request-interval-generator-qps 0.5 \
---request-length-generator-provider "trace" \
---trace-request-length-generator-trace-file "./data/processed_traces/arxiv_summarization_filtered_stats_llama2_tokenizer.csv" \
---request-generator-max-tokens 8192 \
---ttft-deadline 0.3 \
---tbt-deadline 0.03 \
---should-write-metrics \
---wandb-project Project \
---wandb-group Group \
---wandb-run-name Run
+--client_config_num_clients 2 \
+--client_config_num_concurrent_requests_per_client 5 \
+--metrics_config_output_dir "result_outputs" \
+--request_interval_generator_config_type "poisson" \
+--poisson_request_interval_generator_config_qps 0.5 \
+--request_length_generator_config_type "trace" \
+--trace_request_length_generator_config_trace_file "./data/processed_traces/arxiv_summarization_filtered_stats_llama2_tokenizer.csv" \
+--trace_request_length_generator_config_max_tokens 8192 \
+--deadline_config_ttft_deadline 0.3 \
+--deadline_config_tbt_deadline 0.03 \
+--metrics_config_should_write_metrics \
+--metrics_config_wandb_project Project \
+--metrics_config_wandb_group Group \
+--metrics_config_wandb_run_name Run
 ```
 
 There are many more arguments for running benchmark, run the following to know more:
@@ -114,21 +114,20 @@ To profile prefill times of open source systems and create a prefill time predic
 Launch any open source system and setup API keys and URL as shown for [vLLM](#running-with-open-source-systems).
 ```bash
 python -m etalon.prefill_profiler \
---model "meta-llama/Meta-Llama-3-8B-Instruct" \
+--client_config_model "meta-llama/Meta-Llama-3-8B-Instruct" \
 --timeout 600 \
---fixed-request-generator-decode-tokens 16 \
---output-dir "prefill_experiments/prefill_profiler_vllm_llama-3-8b" \
---should-use-given-dir true
+--metrics_config_output_dir "prefill_experiments/prefill_profiler_vllm_llama-3-8b" \
+--metrics_config_should_use_given_dir true
 ```
 
 To modify range of prompt tokens for which prefill times get profiled, use the flag ``--prefill-lengths`` as follows:
 ```bash
 python -m etalon.prefill_profiler \
---model "meta-llama/Meta-Llama-3-8B-Instruct" \
+--client_config_model "meta-llama/Meta-Llama-3-8B-Instruct" \
 --timeout 600 \
---output-dir "prefill_experiments/prefill_profiler_vllm_llama-3-8b" \
---should-use-given-dir true \
---prefill-lengths 256 512 1024 2048 4096 8192 16384 32768 65536
+--metrics_config_output_dir "prefill_experiments/prefill_profiler_vllm_llama-3-8b" \
+--metrics_config_should_use_given_dir true \
+--prefill_profiler_config_prefill_lengths 256 512 1024 2048 4096 8192 16384 32768 65536
 ```
 
 ## Running Capacity Search
