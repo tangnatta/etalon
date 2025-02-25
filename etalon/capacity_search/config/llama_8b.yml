@@ -1,9 +1,9 @@
 servers:
   - openai_server_engine: vllm
-    openai_api_url: "http://localhost:8000"
+    openai_api_url: "http://localhost:8000/v1"
     openai_api_key: token-abc123
   - openai_server_engine: sarathi
-    openai_api_url: "http://localhost:8001"
+    openai_api_url: "http://localhost:8001/v1"
     openai_api_key: token-abc123
 
 models:
@@ -24,7 +24,7 @@ request_generator_configs:
     trace_request_length_generator_trace_file: "data/processed_traces/arxiv_summarization_filtered_stats_llama2_tokenizer.csv"
     trace_file_name: "arxiv"
 
-request_configs:
+client_configs:
   - num_clients: 2
     num_concurrent_requests_per_client: 5
     timeout: 1200
