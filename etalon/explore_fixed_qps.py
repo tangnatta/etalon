@@ -1,10 +1,10 @@
 import argparse
-from functools import partial
 import json
 import multiprocessing
-from multiprocessing import Pool
 import os
 import platform
+from functools import partial
+from multiprocessing import Pool
 
 import wandb
 import yaml

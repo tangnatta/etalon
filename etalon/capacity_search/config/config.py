@@ -1,7 +1,7 @@
 import hashlib
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from itertools import product
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 
 def _get_hash(key):
@@ -15,7 +15,9 @@ class ServerConfig:
     openai_api_key: Optional[str] = None
 
     def get_key(self):
-        return f"{self.openai_server_engine}_{self.openai_api_url}_{self.openai_api_key}"
+        return (
+            f"{self.openai_server_engine}_{self.openai_api_url}_{self.openai_api_key}"
+        )
 
     def get_human_readable_name(self):
         return f"Server engine: {self.openai_server_engine}, URL: {self.openai_api_url}"
