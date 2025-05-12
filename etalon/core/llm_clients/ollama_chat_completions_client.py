@@ -16,22 +16,16 @@ logger = init_logger(__name__)
 MAX_RESPONSES_ALLOWED_TO_STORE = 5
 
 
-class OpenAIChatCompletionsClient(BaseLLMClient):
-    """Client for OpenAI Chat Completions API."""
+class OllamaChatCompletionsClient(BaseLLMClient):
+    """Client for Ollama Chat Completions API."""
 
     def __init__(self, model_name: str, tokenizer_name: str) -> None:
         super().__init__(model_name, tokenizer_name)
-        self.address = os.environ.get("OPENAI_API_BASE")
+        self.address = os.environ.get("OLLAMA_API_BASE")
         if not self.address:
-            self.address = "http://localhost:8000/v1"
+            self.address = "http://localhost:11434"
             logger.warning(
-                "Warning: OPENAI_API_BASE environment variable not set. Defaulting to localhost."
-            )
-        self.key = os.environ.get("OPENAI_API_KEY")
-        if not self.key:
-            self.key = ""
-            logger.warning(
-                "Warning: OPENAI_API_KEY environment variable not set. Defaulting to empty string."
+                "Warning: OLLAMA_API_BASE environment variable not set. Defaulting to localhost:11434."
             )
         self.start_time = time.monotonic()
 
@@ -60,6 +54,7 @@ class OpenAIChatCompletionsClient(BaseLLMClient):
         prompt = request_config.prompt
         prompt, prompt_len = prompt
 
+        # Format message for Ollama API
         message = [
             {"role": "user", "content": prompt},
         ]
@@ -69,17 +64,30 @@ class OpenAIChatCompletionsClient(BaseLLMClient):
             "messages": message,
             "stream": True,
         }
+
+        # Add sampling parameters if provided
         sampling_params = request_config.sampling_params
-        body.update(sampling_params or {})
+        if sampling_params:
+            # Map OpenAI params to Ollama equivalents
+            ollama_params = {}
 
-        headers = {"Authorization": f"Bearer {self.key}"}
+            # Direct mappings (parameters with same names)
+            for param in ["temperature", "top_p", "top_k"]:
+                if param in sampling_params:
+                    ollama_params[param] = sampling_params[param]
+
+            # Map max_tokens to num_predict if present
+            if "max_tokens" in sampling_params:
+                ollama_params["num_predict"] = sampling_params["max_tokens"]
+
+            body.update(ollama_params)
+
         address = self.address
-
         if not address:
             raise ValueError("No host provided.")
         if not address.endswith("/"):
             address = address + "/"
-        address += request_config.address_append_value or "chat/completions"
+        address += "api/chat"  # Ollama chat endpoint
 
         inter_token_times = []
         error_msg = None
@@ -94,7 +102,7 @@ class OpenAIChatCompletionsClient(BaseLLMClient):
 
         try:
             with requests.post(
-                address, json=body, timeout=None, headers=headers, stream=True
+                address, json=body, timeout=None, stream=True
             ) as response:
                 if response.status_code != 200:
                     error_response_code = response.status_code
@@ -102,35 +110,31 @@ class OpenAIChatCompletionsClient(BaseLLMClient):
                     logger.error(f"Request Error: {error_msg}")
                     response.raise_for_status()
 
-                for chunk in response.iter_lines(chunk_size=None):
-                    chunk = chunk.strip()
-
-                    if not chunk:
-                        continue
-                    stem = "data: "
-                    chunk = chunk[len(stem):]
-                    if chunk in [b"[DONE]", "[DONE]"]:
+                for line in response.iter_lines(chunk_size=None):
+                    if not line:
                         continue
 
                     try:
-                        data = json.loads(chunk)
+                        data = json.loads(line)
                     except json.JSONDecodeError:
-                        logger.error(f"JSON decode error with chunk: {chunk}")
+                        logger.error(f"JSON decode error with line: {line}")
                         continue  # Skip malformed JSON
 
                     if "error" in data:
-                        error_msg = data["error"]["message"]
-                        error_response_code = data["error"]["code"]
-                        raise RuntimeError(data["error"]["message"])
+                        error_msg = data["error"]
+                        error_response_code = 500  # Default error code for Ollama
+                        raise RuntimeError(f"Ollama API error: {error_msg}")
 
-                    delta = data["choices"][0]["delta"]
-                    if delta.get("content", None):
+                    # Handle Ollama response format
+                    if "message" in data and "content" in data["message"]:
+                        content = data["message"]["content"]
+                        # For streaming responses, the content will be partial
                         (
                             current_tokens_received,
                             previous_token_count,
                         ) = self.get_current_tokens_received(
                             previous_responses=previous_responses,
-                            current_response=delta["content"],
+                            current_response=content,
                             previous_token_count=previous_token_count,
                         )
 
@@ -143,7 +147,12 @@ class OpenAIChatCompletionsClient(BaseLLMClient):
                                 [0] * (current_tokens_received - 1)
                             )
                         most_recent_received_token_time = time.monotonic()
-                        generated_text += delta["content"]
+                        generated_text += content
+
+                    # Check if response is done
+                    if "done" in data and data["done"]:
+                        break
+
         except Exception as e:
             logger.error(f"Warning Or Error: ({error_response_code}) {e}")
 
@@ -160,5 +169,21 @@ class OpenAIChatCompletionsClient(BaseLLMClient):
 
 
 if __name__ == "__main__":
-    os.environ["OPENAI_API_BASE"] = "http://localhost:8000/v1"
-    os.environ["OPENAI_API_KEY"] = "token-abc123"
+    # Example usage
+    # set api address
+    os.environ["OLLAMA_API_BASE"] = "http://4090wsl:11434"
+
+    client = OllamaChatCompletionsClient(
+        "phi4:14b-q4_K_M", "huggyllama/llama-7b")
+    request_config = RequestConfig(
+        prompt=("Hello, how are you?", 1024),
+        model="phi4:14b-q4_K_M",
+        llm_api="ollama",
+        sampling_params={
+            "temperature": 0.7,
+            "max_tokens": 50,
+        },
+    )
+    metrics, response = client.send_llm_request(request_config)
+    print("Response:", response)
+    print("Metrics:", metrics)

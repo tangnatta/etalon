@@ -95,9 +95,11 @@ class CDFSketch:
         # get quantiles at 1% intervals
         quantiles = np.linspace(0, 1, 101)
         # get quantile values
-        quantile_values = [self.sketch.get_quantile_value(q) for q in quantiles]
+        quantile_values = [
+            self.sketch.get_quantile_value(q) for q in quantiles]
         # create dataframe
-        df = pd.DataFrame({"cdf": quantiles, self.metric_name: quantile_values})
+        df = pd.DataFrame(
+            {"cdf": quantiles, self.metric_name: quantile_values})
 
         return df
 
@@ -133,7 +135,8 @@ class CDFSketch:
         if wandb.run and self.should_write_to_wandb:
             wandb_df = df.copy()
             # rename the self.metric_name column to x_axis_label
-            wandb_df = wandb_df.rename(columns={self.metric_name: x_axis_label})
+            wandb_df = wandb_df.rename(
+                columns={self.metric_name: x_axis_label})
 
             wandb.log(
                 {
