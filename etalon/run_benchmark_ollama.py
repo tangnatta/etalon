@@ -30,6 +30,10 @@ from etalon.request_generator.length_generator.generator_registry import (
     RequestLengthGeneratorRegistry,
 )
 from etalon.request_generator.utils import generate_random_prompt
+from etalon.config.config import (
+    GammaRequestIntervalGeneratorConfig,
+    ZipfRequestLengthGeneratorConfig,
+    MetricsConfig,)
 
 logger = init_logger(__name__)
 
@@ -64,7 +68,7 @@ def get_request_params(
         model=client_config.model,
         prompt=prompt,
         sampling_params=default_sampling_params,
-        llm_api=client_config.llm_api,
+        llm_api="ollama",  # Always use ollama for this script
         address_append_value=client_config.address_append_value,
         id=request_id,
     )
@@ -238,18 +242,37 @@ def run_main_loop(
 
 
 def run_benchmark(
-    benchmark_config: BenchmarkConfig,
+    benchmark_config: BenchmarkConfig = None,
 ):
-    """Get the token throughput and latencies for the given model.
+    """Get the token throughput and latencies for the given model using Ollama API.
 
     Args:
-        benchmark_config: The benchmark configuration.
+        benchmark_config: The benchmark configuration. If None, a default config for Ollama will be created.
 
     Returns:
         A summary of the performance metrics collected across all completed requests
         (e.g. throughput, latencies, etc.)
         The individual metrics for each request.
     """
+    # Set Ollama API address
+    os.environ["OLLAMA_API_BASE"] = "https://x8dmhtl5-11434.asse.devtunnels.ms/"
+
+    # Create default config if none provided
+    if benchmark_config is None:
+        client_config = ClientConfig(
+            model="llama2",  # Default model
+            tokenizer="hf/TinyLlama/TinyLlama-1.1B-Chat",  # Default tokenizer
+            llm_api="ollama",  # Always use Ollama
+        )
+        benchmark_config = BenchmarkConfig(
+            client_config=client_config,
+            max_completed_requests=100,  # Default to 100 requests
+            timeout=300,  # Default timeout of 5 minutes
+        )
+    else:
+        # Override the llm_api to ensure using Ollama
+        benchmark_config.client_config.llm_api = "ollama"
+
     service_metrics = ServiceMetrics(
         max_requests=benchmark_config.max_completed_requests,
         timeout=benchmark_config.timeout,
@@ -287,23 +310,75 @@ def run_benchmark(
     )
 
     logger.info(
-        f"Results for token benchmark for {benchmark_config.client_config.model} queried with the {benchmark_config.client_config.llm_api} api. {service_metrics}"
+        f"Results for token benchmark for {benchmark_config.client_config.model} queried with the Ollama API. {service_metrics}"
     )
 
+    print("Storing metrics...")
     service_metrics.store_output()
+    print("Done storing metrics.")
     logger.info(f"Metrics stored to {service_metrics.output_dir}")
 
     # store the generated texts
     with open(
-        os.path.join(service_metrics.output_dir, "generated_texts.txt"), "w"
+        os.path.join(service_metrics.output_dir,
+                     "generated_texts.txt"), "w", encoding="utf-8"
     ) as f:
         f.write(("\n" + "-" * 30 + "\n").join(generated_texts))
 
 
 if __name__ == "__main__":
+    # On Windows, we need to use 'spawn' method (default), but ensure we execute after if __name__ == '__main__'
+    # On MacOS, use 'fork' method
     if platform.system() == "Darwin":
         multiprocessing.set_start_method("fork", force=True)
 
-    benchmark_config: BenchmarkConfig = BenchmarkConfig.create_from_cli_args()
-    random.seed(benchmark_config.seed)
-    run_benchmark(benchmark_config=benchmark_config)
+    # try:
+    #     # Try to parse CLI ags first
+    #     benchmark_config: BenchmarkConfig = BenchmarkConfig.create_from_cli_args()
+    #     # Override the LLM API to ensure we use Ollama
+    #     benchmark_config.client_config.llm_api = "ollama"
+    # except Exception as e:
+    #     logger.warning(
+    #         f"Failed to parse CLI args: {e}. Using default Ollama configuration.")
+    #     benchmark_config = None
+
+    os.environ["OLLAMA_API_BASE"] = "http://4090wsl:11434"
+
+    # List of models to benchmark
+    models_to_test = [
+        "phi4:14b-q4_K_M",
+        "qwen2.5:14b-instruct-q4_K_M",
+        "mistral-nemo:12b-instruct-2407-q4_K_M",
+        "gemma3:12b-it-q4_K_M",
+        "llama3.1:8b-instruct-q4_K_M"
+    ]
+
+    for model in models_to_test:
+        logger.info(f"Starting benchmark for model: {model}")
+
+        # Create output directory based on model name
+        output_dir = f"{model.split(':')[0]}_results_r300_t1000_cl2_con3"
+
+        # Create benchmark config from specified parameters
+        benchmark_config = BenchmarkConfig(
+            client_config=ClientConfig(
+                model=model,
+                tokenizer="huggyllama/llama-7b",
+                num_clients=2,
+                num_concurrent_requests_per_client=3,
+                llm_api="ollama",
+            ),
+            request_interval_generator_config=GammaRequestIntervalGeneratorConfig(),
+            request_length_generator_config=ZipfRequestLengthGeneratorConfig(
+                max_tokens=8192),
+            metrics_config=MetricsConfig(output_dir=output_dir),
+            max_completed_requests=300,
+            timeout=1000,
+        )
+
+        random.seed(benchmark_config.seed)  # Default seed for reproducibility
+        run_benchmark(benchmark_config=benchmark_config)
+
+        logger.info(f"Completed benchmark for model: {model}")
+        # Add a small delay between models to ensure proper cleanup
+        time.sleep(5)

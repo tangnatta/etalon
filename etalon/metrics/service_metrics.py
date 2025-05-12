@@ -92,7 +92,8 @@ class ServiceMetrics:
     def __str__(self) -> str:
         return "\n".join(
             [f"{k}: {v:.5f}" for k, v in self.get_aggregated_summary().items()]
-            + [str(summary) for summary in self.metric_store.summaries.values()]
+            + [str(summary)
+               for summary in self.metric_store.summaries.values()]
         )
 
     def __repr__(self) -> str:
