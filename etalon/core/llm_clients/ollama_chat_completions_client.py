@@ -100,6 +100,8 @@ class OllamaChatCompletionsClient(BaseLLMClient):
         most_recent_received_token_time = time.monotonic()
         request_dispatched_at = time.monotonic() - self.start_time
 
+        print(f"Sending request to ```{address}``` with body: ```{body}```")
+        
         try:
             with requests.post(
                 address, json=body, timeout=None, stream=True
@@ -113,6 +115,7 @@ class OllamaChatCompletionsClient(BaseLLMClient):
                 for line in response.iter_lines(chunk_size=None):
                     if not line:
                         continue
+                    
 
                     try:
                         data = json.loads(line)
@@ -155,7 +158,17 @@ class OllamaChatCompletionsClient(BaseLLMClient):
 
         except Exception as e:
             logger.error(f"Warning Or Error: ({error_response_code}) {e}")
+        
+        print(f"Request completed with {tokens_received} tokens received.")
+        print(f"Debug metrics:")
+        print(f"  request_dispatched_at: {request_dispatched_at}")
+        print(f"  inter_token_times: {inter_token_times[:5]}... (total: {len(inter_token_times)})")
+        print(f"  num_prompt_tokens: {prompt_len}")
+        print(f"  num_output_tokens: {tokens_received}")
+        print(f"  error_code: {error_response_code}")
+        print(f"  error_msg: {error_msg}")
 
+        
         metrics = RequestMetrics(
             request_dispatched_at=request_dispatched_at,
             inter_token_times=inter_token_times,

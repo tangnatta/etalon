@@ -255,7 +255,7 @@ def run_benchmark(
         The individual metrics for each request.
     """
     # Set Ollama API address
-    os.environ["OLLAMA_API_BASE"] = "https://x8dmhtl5-11434.asse.devtunnels.ms/"
+    # os.environ["OLLAMA_API_BASE"] = "https://x8dmhtl5-11434.asse.devtunnels.ms/"
 
     # Create default config if none provided
     if benchmark_config is None:
