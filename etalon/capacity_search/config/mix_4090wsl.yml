@@ -1,0 +1,43 @@
+servers:
+  - openai_server_engine: 4090wsl
+    ollama_api_url: "http://4090wsl:11434/"
+    openai_api_url: "http://4090wsl:11434/v1"
+    openai_api_key: token-abc123
+
+models:
+  # - name: qwen3-14b-q4_K_M
+  #   identifier: qwen3:14b-q4_K_M
+  - name: phi4-14b-q4_K_M
+    identifier: phi4:14b-q4_K_M
+  # - name: mistral-nemo-12b-instruct-2407-q4_K_M
+  #   identifier: mistral-nemo:12b-instruct-2407-q4_K_M
+  # - name: gemma3-12b-it-q4_K_M
+  #   identifier: gemma3:12b-it-q4_K_M
+
+request_generator_configs:
+  - start_qps: 1
+    request_interval_generator_provider: "poisson"
+    request_length_generator_provider: "trace"
+    request_generator_max_tokens: 16384
+    trace_request_length_generator_trace_file: "data/processed_traces/arxiv_summarization_filtered_stats_llama2_tokenizer.csv"
+    trace_file_name: "arxiv"
+  # - start_qps: 1
+  #   request_interval_generator_provider: "poisson"
+  #   request_length_generator_provider: "trace"
+  #   request_generator_max_tokens: 8192
+  #   trace_request_length_generator_trace_file: "data/processed_traces/sharegpt_8k_filtered_stats_llama2_tokenizer.csv"
+  #   trace_file_name: "sharegpt"
+
+client_configs:
+  - num_clients: 10
+    num_concurrent_requests_per_client: 10
+    timeout: 1200
+    max_num_completed_requests: 1000
+    additional_sampling_params: {}
+    llm_api: "ollama"
+  # - num_clients: 10
+  #   num_concurrent_requests_per_client: 10
+  #   timeout: 1200
+  #   max_num_completed_requests: 1000
+  #   additional_sampling_params: {}
+  #   llm_api: "ollama"

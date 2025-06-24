@@ -201,7 +201,8 @@ class MetricStore:
 
         # store metric objects
         for metric_name, metric_summary in self.summaries.items():
-            metric_summary._save_df(metric_summary._to_df(), output_dir, metric_name)
+            metric_summary._save_df(
+                metric_summary._to_df(), output_dir, metric_name)
             metric_summary.plot_cdf(output_dir, metric_name, metric_name)
 
         # store service level deadline stats
@@ -241,6 +242,46 @@ class MetricStore:
         self.store_throughput_metrics(output_dir)
         self.store_ttft_violin_plots(output_dir)
         self.store_generation_stalls(output_dir)
+        self.store_ttft_boxplots(output_dir)
+
+    def store_ttft_boxplots(self, output_dir: str):
+        data = {}
+        for i, ttft in enumerate(self.request_level_metrics.ttft):
+            if str(self.request_level_metrics.num_prompt_tokens[i]) not in data:
+                data[str(self.request_level_metrics.num_prompt_tokens[i])] = []
+            data[str(self.request_level_metrics.num_prompt_tokens[i])].append(ttft)
+        df = pd.DataFrame(
+            {
+                "ttft": [ttft for ttfts in data.values() for ttft in ttfts],
+                "prompt_length": [
+                    int(prompt_length)
+                    for prompt_length in data.keys()
+                    for _ in data[prompt_length]
+                ],
+            }
+        )
+
+        # Create 10 bins on x-axis, each ~10 units wide
+        df['prompt_length_bin'] = pd.cut(df['prompt_length'], bins=5000)
+
+        # Optional: convert bin labels to midpoints for numerical x-axis
+        df['prompt_length_bin_mid'] = df['prompt_length_bin'].apply(
+            lambda b: b.mid)
+        df = df.sort_values("prompt_length_bin_mid",
+                            key=lambda x: x.astype(int))
+
+        df.to_csv(f"{output_dir}/ttft_box_plot.csv", index=False)
+
+        fig = px.box(df, x="prompt_length_bin_mid", y="ttft", points="all")
+        fig.update_layout(
+            title="TTFT Box Plot",
+            xaxis_title="Number of Prompt Tokens",
+            yaxis_title="TTFT (s)",
+        )
+        fig.write_image(f"{output_dir}/ttft_box_plot.png")
+        if self.should_write_metrics and wandb.run:
+            wandb.log({"ttft_box_plot": fig})
+            wandb.log({"ttft_box_data": wandb.Table(dataframe=df)})
 
     def store_deadline_miss_rate_for_target_tbt(self, output_dir: str):
         # plot deadline miss rate for target TBT values
@@ -341,7 +382,11 @@ class MetricStore:
             }
         )
         df = df.sort_values("prompt_length", key=lambda x: x.astype(int))
-        fig = px.violin(df, x="prompt_length", y="ttft", box=True, points="all")
+
+        df.to_csv(f"{output_dir}/ttft_violin_plot.csv", index=False)
+
+        fig = px.violin(df, x="prompt_length", y="ttft",
+                        box=True, points="all")
         fig.update_layout(
             title="TTFT Violin Plot",
             xaxis_title="Number of Prompt Tokens",

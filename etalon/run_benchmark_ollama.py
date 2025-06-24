@@ -326,6 +326,16 @@ def run_benchmark(
         f.write(("\n" + "-" * 30 + "\n").join(generated_texts))
 
 
+# if __name__ == "__main__":
+#     if platform.system() == "Darwin":
+#         multiprocessing.set_start_method("fork", force=True)
+
+#     benchmark_config: BenchmarkConfig = BenchmarkConfig.create_from_cli_args()
+#     benchmark_config.client_config.tokenizer = "huggyllama/llama-7b" # Force to use a specific tokenizer for Ollama
+#     random.seed(benchmark_config.seed)
+#     run_benchmark(benchmark_config=benchmark_config)
+
+
 if __name__ == "__main__":
     # On Windows, we need to use 'spawn' method (default), but ensure we execute after if __name__ == '__main__'
     # On MacOS, use 'fork' method
@@ -350,30 +360,36 @@ if __name__ == "__main__":
         "qwen2.5:14b-instruct-q4_K_M",
         "mistral-nemo:12b-instruct-2407-q4_K_M",
         "gemma3:12b-it-q4_K_M",
-        "llama3.1:8b-instruct-q4_K_M"
+        # "llama3.1:8b-instruct-q4_K_M"
     ]
+
+    # Parameters for the benchmark
+    max_req = 100
+    timeout = 600  # Timeout in seconds
+    num_clients = 2
+    com_per_client = 3
 
     for model in models_to_test:
         logger.info(f"Starting benchmark for model: {model}")
 
         # Create output directory based on model name
-        output_dir = f"{model.split(':')[0]}_results_r300_t1000_cl2_con3"
+        output_dir = f"ollamaPara4_{model.split(':')[0]}_results_r{max_req}_t{timeout}_cl{num_clients}_con{com_per_client}"
 
         # Create benchmark config from specified parameters
         benchmark_config = BenchmarkConfig(
             client_config=ClientConfig(
                 model=model,
                 tokenizer="huggyllama/llama-7b",
-                num_clients=2,
-                num_concurrent_requests_per_client=3,
+                num_clients=num_clients,
+                num_concurrent_requests_per_client=com_per_client,
                 llm_api="ollama",
             ),
             request_interval_generator_config=GammaRequestIntervalGeneratorConfig(),
             request_length_generator_config=ZipfRequestLengthGeneratorConfig(
-                max_tokens=8192),
+                max_tokens=32768),
             metrics_config=MetricsConfig(output_dir=output_dir),
-            max_completed_requests=300,
-            timeout=1000,
+            max_completed_requests=max_req,
+            timeout=timeout,
         )
 
         random.seed(benchmark_config.seed)  # Default seed for reproducibility

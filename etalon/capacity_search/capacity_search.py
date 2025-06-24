@@ -214,8 +214,12 @@ class CapacitySearch:
             )
 
         self._run_benchmark(benchmark_config)
+        
+        print(run_dir)
 
         request_level_metrics_file = self._get_request_level_metrics(run_dir)
+        
+        print(request_level_metrics_file)
 
         assert (
             request_level_metrics_file is not None

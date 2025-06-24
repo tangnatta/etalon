@@ -13,20 +13,22 @@ class ServerConfig:
     openai_server_engine: Optional[str] = None
     openai_api_url: Optional[str] = None
     openai_api_key: Optional[str] = None
+    ollama_api_url: Optional[str] = None
 
     def get_key(self):
         return (
-            f"{self.openai_server_engine}_{self.openai_api_url}_{self.openai_api_key}"
+            f"{self.openai_server_engine}_{self.openai_api_url}_{self.openai_api_key}_{self.ollama_api_url}"
         )
 
     def get_human_readable_name(self):
-        return f"Server engine: {self.openai_server_engine}, URL: {self.openai_api_url}"
+        return f"Server engine: {self.openai_server_engine}, URL: {self.openai_api_url}, Ollama URL: {self.ollama_api_url}"
 
     def to_config_dict(self):
         return {
             "openai_server_engine": self.openai_server_engine,
             "openai_api_url": self.openai_api_url,
             "openai_api_key": self.openai_api_key,
+            "ollama_api_url": self.ollama_api_url,
         }
 
 
